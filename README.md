@@ -623,10 +623,11 @@ ssh -i ssh/kubernetes.id_rsa ubuntu@${external_ip}
 Execute on each controller:
 
 ```sh
+ETCD_VERSION=3.3.12
 wget -q --show-progress --https-only --timestamping \
-  "https://github.com/coreos/etcd/releases/download/v3.2.11/etcd-v3.2.11-linux-amd64.tar.gz"
-tar -xvf etcd-v3.2.11-linux-amd64.tar.gz
-sudo mv etcd-v3.2.11-linux-amd64/etcd* /usr/local/bin/
+  "https://github.com/coreos/etcd/releases/download/v${ETCD_VERSION}/etcd-v${ETCD_VERSION}-linux-amd64.tar.gz"
+tar -xvf etcd-v${ETCD_VERSION}-linux-amd64.tar.gz
+sudo mv etcd-v${ETCD_VERSION}-linux-amd64/etcd* /usr/local/bin/
 sudo mkdir -p /etc/etcd /var/lib/etcd
 sudo cp ca.pem kubernetes-key.pem kubernetes.pem /etc/etcd/
 INTERNAL_IP=$(curl -s http://169.254.169.254/latest/meta-data/local-ipv4)
@@ -698,11 +699,12 @@ ssh -i ssh/kubernetes.id_rsa ubuntu@${external_ip}
 Execute on each controller:
 
 ```sh
+KUBE_VERSION=1.14.1
 wget -q --show-progress --https-only --timestamping \
-  "https://storage.googleapis.com/kubernetes-release/release/v1.9.0/bin/linux/amd64/kube-apiserver" \
-  "https://storage.googleapis.com/kubernetes-release/release/v1.9.0/bin/linux/amd64/kube-controller-manager" \
-  "https://storage.googleapis.com/kubernetes-release/release/v1.9.0/bin/linux/amd64/kube-scheduler" \
-  "https://storage.googleapis.com/kubernetes-release/release/v1.9.0/bin/linux/amd64/kubectl"
+  "https://storage.googleapis.com/kubernetes-release/release/v${KUBE_VERSION}/bin/linux/amd64/kube-apiserver" \
+  "https://storage.googleapis.com/kubernetes-release/release/v${KUBE_VERSION}/bin/linux/amd64/kube-controller-manager" \
+  "https://storage.googleapis.com/kubernetes-release/release/v${KUBE_VERSION}/bin/linux/amd64/kube-scheduler" \
+  "https://storage.googleapis.com/kubernetes-release/release/v${KUBE_VERSION}/bin/linux/amd64/kubectl"
 chmod +x kube-apiserver kube-controller-manager kube-scheduler kubectl
 sudo mv kube-apiserver kube-controller-manager kube-scheduler kubectl /usr/local/bin/
 sudo mkdir -p /var/lib/kubernetes/
@@ -716,7 +718,6 @@ Documentation=https://github.com/kubernetes/kubernetes
 
 [Service]
 ExecStart=/usr/local/bin/kube-apiserver \\
-  --admission-control=Initializers,NamespaceLifecycle,NodeRestriction,LimitRanger,ServiceAccount,DefaultStorageClass,ResourceQuota \\
   --advertise-address=${INTERNAL_IP} \\
   --allow-privileged=true \\
   --apiserver-count=3 \\
@@ -728,6 +729,7 @@ ExecStart=/usr/local/bin/kube-apiserver \\
   --bind-address=0.0.0.0 \\
   --client-ca-file=/var/lib/kubernetes/ca.pem \\
   --enable-swagger-ui=true \\
+  --enable-admission-plugins=NamespaceLifecycle,NodeRestriction,LimitRanger,ServiceAccount,DefaultStorageClass,ResourceQuota \
   --etcd-cafile=/var/lib/kubernetes/ca.pem \\
   --etcd-certfile=/var/lib/kubernetes/kubernetes.pem \\
   --etcd-keyfile=/var/lib/kubernetes/kubernetes-key.pem \\
@@ -876,14 +878,17 @@ ssh -i ssh/kubernetes.id_rsa ubuntu@${external_ip}
 Execute on each worker:
 
 ```sh
+KUBE_VERSION=1.14.1
+CNI_PLUGINS_VERSION=0.7.5
+CONTAINERD_VERSION=1.2.6
 sudo apt-get update
 sudo apt-get -y install socat
 wget -q --show-progress --https-only --timestamping \
-  https://github.com/containernetworking/plugins/releases/download/v0.6.0/cni-plugins-amd64-v0.6.0.tgz \
-  https://github.com/containerd/cri-containerd/releases/download/v1.0.0-beta.1/cri-containerd-1.0.0-beta.1.linux-amd64.tar.gz \
-  https://storage.googleapis.com/kubernetes-release/release/v1.9.0/bin/linux/amd64/kubectl \
-  https://storage.googleapis.com/kubernetes-release/release/v1.9.0/bin/linux/amd64/kube-proxy \
-  https://storage.googleapis.com/kubernetes-release/release/v1.9.0/bin/linux/amd64/kubelet
+  https://github.com/containernetworking/plugins/releases/download/v${CNI_PLUGINS_VERSION}/cni-plugins-amd64-v${CNI_PLUGINS_VERSION}.tgz \
+  https://storage.googleapis.com/cri-containerd-release/cri-containerd-${CONTAINERD_VERSION}.linux-amd64.tar.gz \
+  https://storage.googleapis.com/kubernetes-release/release/v${KUBE_VERSION}/bin/linux/amd64/kubectl \
+  https://storage.googleapis.com/kubernetes-release/release/v${KUBE_VERSION}/bin/linux/amd64/kube-proxy \
+  https://storage.googleapis.com/kubernetes-release/release/v${KUBE_VERSION}/bin/linux/amd64/kubelet
 sudo mkdir -p \
   /etc/cni/net.d \
   /opt/cni/bin \
@@ -891,8 +896,8 @@ sudo mkdir -p \
   /var/lib/kube-proxy \
   /var/lib/kubernetes \
   /var/run/kubernetes
-sudo tar -xvf cni-plugins-amd64-v0.6.0.tgz -C /opt/cni/bin/
-sudo tar -xvf cri-containerd-1.0.0-beta.1.linux-amd64.tar.gz -C /
+sudo tar -xvf cni-plugins-amd64-v${CNI_PLUGINS_VERSION}.tgz -C /opt/cni/bin/
+sudo tar --no-overwrite-dir -xvf cri-containerd-${CONTAINERD_VERSION}.linux-amd64.tar.gz -C /
 chmod +x kubectl kube-proxy kubelet
 sudo mv kubectl kube-proxy kubelet /usr/local/bin/
 ```
@@ -947,8 +952,8 @@ cat > kubelet.service <<EOF
 [Unit]
 Description=Kubernetes Kubelet
 Documentation=https://github.com/kubernetes/kubernetes
-After=cri-containerd.service
-Requires=cri-containerd.service
+After=containerd.service
+Requires=containerd.service
 
 [Service]
 ExecStart=/usr/local/bin/kubelet \\
@@ -960,7 +965,7 @@ ExecStart=/usr/local/bin/kubelet \\
   --cluster-dns=10.32.0.10 \\
   --cluster-domain=cluster.local \\
   --container-runtime=remote \\
-  --container-runtime-endpoint=unix:///var/run/cri-containerd.sock \\
+  --container-runtime-endpoint=unix:///var/run/containerd/containerd.sock \\
   --image-pull-progress-deadline=2m \\
   --kubeconfig=/var/lib/kubelet/kubeconfig \\
   --network-plugin=cni \\
@@ -999,8 +1004,8 @@ EOF
 
 sudo mv kubelet.service kube-proxy.service /etc/systemd/system/
 sudo systemctl daemon-reload
-sudo systemctl enable containerd cri-containerd kubelet kube-proxy
-sudo systemctl start containerd cri-containerd kubelet kube-proxy
+sudo systemctl enable containerd kubelet kube-proxy
+sudo systemctl start containerd kubelet kube-proxy
 ```
 
 # Configuring kubectl for Remote Access
